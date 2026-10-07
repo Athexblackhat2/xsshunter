@@ -1,0 +1,27 @@
+# ===== Core HTTP =====
+httpx>=0.27.0
+curl_cffi>=0.6.2
+
+# ===== Browser Automation (DOM XSS) =====
+playwright>=1.45.0
+
+# ===== HTML/JS Parsing =====
+selectolax>=0.3.20
+esprima>=4.0.1
+
+# ===== CLI =====
+typer>=0.12.3
+rich>=13.7.1
+
+# ===== Reporting =====
+jinja2>=3.1.4
+
+# ===== YAML Config =====
+pyyaml>=6.0.1
+
+# ===== Async Support =====
+aiofiles>=23.2.1
+uvloop>=0.19.0 ; sys_platform != "win32"
+
+# ===== Utility =====
+python-dotenv>=1.0.1
