@@ -86,6 +86,7 @@ class Brain:
         endpoints = await self._crawl(target, depth, max_pages)
         if not endpoints:
             print("[-] No endpoints found.")
+            await self._shutdown()
             return self._empty_result(target, "no endpoints")
         print(f"      → {len(endpoints)} endpoints found")
 
@@ -111,7 +112,7 @@ class Brain:
                     "context": ctx.context,
                     "vendor": p.get("vendor", ""),
                 })
-        # Dedup
+        # Dedup by raw
         seen = set()
         unique_payloads = []
         for p in all_payloads:
@@ -138,7 +139,8 @@ class Brain:
             confirmed = await self._verify_dom(hits)
             print(f"      → {len(confirmed)} confirmed XSS")
         else:
-            confirmed = hits
+            # No DOM verify — mark reflected as findings, but ensure JSON-safe
+            confirmed = [self._json_safe_hit(h) for h in hits]
 
         # Build report
         duration = round(time.time() - start, 2)
@@ -154,7 +156,10 @@ class Brain:
         }
 
         # Save reports
-        self.report.build(report_data, out_dir="./reports")
+        try:
+            self.report.build(report_data, out_dir="./reports")
+        except Exception as e:
+            print(f"[-] Report build failed: {e}")
 
         await self._shutdown()
         return report_data
@@ -252,11 +257,13 @@ class Brain:
             return []
 
     # -----------------------------------------------------
-    # 4. DOM verify — Playwright
+    # 4. DOM verify — Playwright (FIXED: JSON-safe)
     # -----------------------------------------------------
     async def _verify_dom(self, hits: list[dict]) -> list[dict]:
         verified = []
-        for h in hits:
+        total = len(hits)
+
+        for idx, h in enumerate(hits, 1):
             url = h.get("url", "")
             param = h.get("param", "")
             payload = h.get("payload", "")
@@ -266,20 +273,58 @@ class Brain:
                 continue
 
             try:
-                executed = await self.dom.verify(
+                dom_result = await self.dom.verify(
                     url=url,
                     param=param,
                     payload=payload,
                     method=method,
                 )
-                h["executed"] = executed
-                if executed:
+
+                # ✅ FIX: Extract primitives only — NOT the DOMResult object
+                h["executed"] = bool(dom_result.executed)
+                h["dialogs"] = list(dom_result.dialogs or [])
+                h["dom_mutations"] = list(dom_result.dom_mutations or [])
+                h["console_errors"] = list(dom_result.console_errors or [])
+                h["screenshot_b64"] = dom_result.screenshot_b64 or ""
+                h["dom_dump"] = (dom_result.dom_dump or "")[:2000]
+                h["dom_duration_ms"] = int(dom_result.duration_ms or 0)
+                if dom_result.error:
+                    h["dom_error"] = str(dom_result.error)
+
+                if h["executed"]:
                     verified.append(h)
+                    print(f"      [{idx}/{total}] ✅ EXECUTED  {url[:60]}")
+                else:
+                    print(f"      [{idx}/{total}] ❌ not executed  {url[:60]}")
+
             except Exception as e:
                 h["executed"] = False
                 h["dom_error"] = str(e)
+                print(f"      [{idx}/{total}] ⚠️  error: {e}")
 
         return verified
+
+    # -----------------------------------------------------
+    # Ensure hit dict is JSON-safe (fallback path)
+    # -----------------------------------------------------
+    def _json_safe_hit(self, h: dict) -> dict:
+        """Return a copy of hit with only JSON-serializable values."""
+        out = {}
+        for k, v in h.items():
+            if isinstance(v, (str, int, float, bool, type(None))):
+                out[k] = v
+            elif isinstance(v, list):
+                out[k] = [str(x) if not isinstance(x, (str, int, float, bool, type(None))) else x for x in v]
+            elif isinstance(v, dict):
+                out[k] = {str(kk): str(vv) if not isinstance(vv, (str, int, float, bool, type(None))) else vv for kk, vv in v.items()}
+            else:
+                out[k] = str(v)
+        # Ensure these keys exist
+        out.setdefault("executed", False)
+        out.setdefault("screenshot_b64", "")
+        out.setdefault("dialogs", [])
+        out.setdefault("dom_mutations", [])
+        return out
 
     # -----------------------------------------------------
     # Headers helper
